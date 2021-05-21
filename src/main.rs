@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 use varisat::{CnfFormula, ExtendFormula};
 use varisat::solver::Solver;
 use varisat::{Var, Lit};
+use bitintr::Popcnt;
 
 type Field = Vec<Vec<usize>>;
 type P = (usize, usize);
@@ -101,10 +102,9 @@ fn solve_numberlink(field: &Field) -> Option<Sol> {
                 let mut vars: Vec<Var> = vec![];    
                 for v in adjs {
                     vars.push(mp[&(u, *v)]);
-                    formula.add_clause(&[mp[&(u, *v)].negative()]);
                 }
                 
-                for lits in mk_clause_eq1(vars) {
+                for lits in mk_clause_less2(vars) {
                     formula.add_clause(lits.as_slice());
                 }
             }    
@@ -114,19 +114,24 @@ fn solve_numberlink(field: &Field) -> Option<Sol> {
                 let mut vars: Vec<Var> = vec![];    
                 for v in adjs {
                     vars.push(mp[&(*v, u)]);
-                    formula.add_clause(&[mp[&(*v, u)].negative()]);
                 }
 
-                for lits in mk_clause_eq1(vars) {
+                for lits in mk_clause_less2(vars) {
                     formula.add_clause(lits.as_slice());
                 }
             }    
         }
     }
 
+    println!("{:?}", formula);
+
     let mut solver = Solver::new();
 
     solver.add_formula(&formula);
+
+    let solution = solver.solve().unwrap();
+
+    println!("Solution: {}", solution);
 
     let model = solver.model();
 
@@ -168,22 +173,42 @@ fn parse_field(field :&Field) -> Option<(Vec<P>, Vec<P>, Vec<P>)> {
 fn mk_clause_eq1(vars: Vec<Var>) -> Vec<Vec<Lit>> {
     let mut res: Vec<Vec<Lit>> = vec![];
     let mut flgs: Vec<bool> = vec![];
+    let n = vars.len();
 
-    for _ in 0..vars.len() {
-        flgs.push(false);
-    }
-
-    for (i, _) in vars.clone().into_iter().enumerate() {
-        flgs[i] = !flgs[i];
+    for bit in 0..(1<<n) {
+        if ((bit as u32).popcnt()) as usize == n-1 {
+            continue;
+        }
 
         let mut lits: Vec<Lit> = vec![];
 
-        for (i, flg) in flgs.clone().into_iter().enumerate() {
-            lits.push(Lit::from_var(vars[i], flg));
+        for i in 0..n {
+            lits.push(Lit::from_var(vars[i], (bit>>i&1) != 0));
         }
 
         res.push(lits);
-        flgs[i] = !flgs[i];
+    }
+
+    res
+}
+
+fn mk_clause_less2(vars: Vec<Var>) -> Vec<Vec<Lit>> {
+    let mut res: Vec<Vec<Lit>> = vec![];
+    let mut flgs: Vec<bool> = vec![];
+    let n = vars.len();
+
+    for bit in 0..(1<<n) {
+        if n < 2+((bit as u32).popcnt()) as usize {
+            continue;
+        }
+
+        let mut lits: Vec<Lit> = vec![];
+
+        for i in 0..n {
+            lits.push(Lit::from_var(vars[i], (bit>>i&1) != 0));
+        }
+
+        res.push(lits);
     }
 
     res
