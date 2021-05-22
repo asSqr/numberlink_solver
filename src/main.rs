@@ -23,36 +23,91 @@ fn solve_numberlink(field: &Field) -> Option<Sol> {
         return None;
     }
 
+    let mut vs: Vec<P> = vec![];
+
+    for i in 0..height {
+        for j in 0..width {
+            vs.push((i, j));
+        }
+    }
+
     let arcs: Vec<Arc> = gen_arcs(width, height);
 
     let mut formula = CnfFormula::new();
 
     let mut mp: HashMap<Arc, Var> = HashMap::new();
 
+    for (i, arc) in arcs.clone().into_iter().enumerate() {
+        println!("arc {}: {:?}", i, arc);
+    }
+
     /* "Solving Nubmerlink by a SAT-based Constraint Solver" (https://ipsj.ixsq.nii.ac.jp/ej/index.php?action=pages_view_main&active_action=repository_action_common_download&item_id=102780&item_no=1&attribute_id=1&file_no=1&page_id=13&block_id=8) */
     for (i, (u, v)) in arcs.clone().into_iter().enumerate() {
-        let x = Var::from_index(i);
+        let x = Var::from_index(i+1);
         let num_u = field[u.0][u.1];
         let num_v = field[v.0][v.1];
     
         mp.insert((u, v), x);
-        
-        // (12)
-        // !(x and num_u != num_v)
-        // !x or num_u == num_v
-        if num_u != num_v {
-            formula.add_clause(&[x.negative()]);
+    }
+
+    let length = arcs.len();
+    let mut m = s.len();
+    let mut mb = 0;
+
+    println!("m: {}", m);
+
+    while m > 0 {
+        m >>= 1;
+        mb += 1;
+    }
+
+    println!("mb: {}", mb);
+
+    let mut bmp: HashMap<P, Vec<Var>> = HashMap::new();
+
+    // vs*log(n)
+    // 自然数変数を bit ごとに分解
+    for (index, (i,j)) in vs.clone().into_iter().enumerate() {
+        for b in 0..mb {
+            let x = Var::from_index(length+index*mb+b+1);
+
+            if !bmp.contains_key(&(i,j)) {
+                bmp.insert((i,j), vec![x]);
+            } else {
+                bmp.get_mut(&(i,j)).unwrap().push(x);
+            }
+
+            let mut num = field[i][j];
+
+            if num == 0 {
+                continue;
+            }
+
+            num -= 1;
+
+            // (11)
+            formula.add_clause(&[Lit::from_var(x, (num>>b&1) != 0)]);
         }
     }
 
-    for (u, v) in arcs {
-        let adjs: &Vec<P> = &adj(u, width, height);
-
+    for (u, v) in arcs.clone().into_iter() {
         let x = mp[&(u, v)];
+
+        // (12)
+        // !(x and num_u != num_v)
+        // !x or f_u == f_v
+        for lits in mk_clause_impl(&x, &bmp[&u], &bmp[&v]) {
+            formula.add_clause(lits.as_slice());
+        }
+
         let y = mp[&(v, u)];
 
         // (2)
         formula.add_clause(&[x.negative(), y.negative()]);
+    }
+
+    for u in vs {
+        let adjs: &Vec<P> = &adj(u, width, height);
 
         if s.contains(&u) {
             // (3)
@@ -97,33 +152,57 @@ fn solve_numberlink(field: &Field) -> Option<Sol> {
         }
 
         if b.contains(&u) {
-            // (8)
+            // (8) (9)
             {
-                let mut vars: Vec<Var> = vec![];    
+                println!("b contains {:?}", u);
+
+                let mut varss: Vec<Vec<Var>> = vec![];
+                let mut vars1: Vec<Var> = vec![];
+                let mut vars2: Vec<Var> = vec![];    
                 for v in adjs {
-                    vars.push(mp[&(u, *v)]);
-                }
-                
-                for lits in mk_clause_less2(vars) {
-                    formula.add_clause(lits.as_slice());
-                }
-            }    
-            
-            // (9)
-            {
-                let mut vars: Vec<Var> = vec![];    
-                for v in adjs {
-                    vars.push(mp[&(*v, u)]);
+                    vars1.push(mp[&(u, *v)]);
+                    vars2.push(mp[&(*v, u)]);
                 }
 
-                for lits in mk_clause_less2(vars) {
+                varss.push(vars1);
+                varss.push(vars2);
+
+                for i in 0..2 {
+                    println!("----------");
+
+                    for var in &varss[i] {
+                        println!("{}", var.index());
+                    }
+
+                    println!("----------");
+                }
+
+                for lits in mk_clause_d(varss) {
                     formula.add_clause(lits.as_slice());
                 }
-            }    
+            }
         }
     }
 
-    println!("{:?}", formula);
+    /*for lits in formula.iter() {
+        let mut flag = false;
+
+        for lit in lits {
+            flag = flag || lit.var().index() == 8;
+        }
+
+        flag = true;
+
+        if flag {
+            println!("---------");
+
+            for lit in lits {
+                println!("{} [{}]", lit.var().index(), if lit.is_positive() { "True" } else { "False" });
+            }
+
+            println!("---------");
+        }
+    }*/
 
     let mut solver = Solver::new();
 
@@ -131,13 +210,99 @@ fn solve_numberlink(field: &Field) -> Option<Sol> {
 
     let solution = solver.solve().unwrap();
 
-    println!("Solution: {}", solution);
-
     let model = solver.model();
 
+    /*let mut index = 1;
+
+    let mut prev_formula = CnfFormula::new();
+
+    loop {
+        solver = Solver::new();
+
+        solver.add_formula(&formula);
+
+        solution = solver.solve().unwrap();
+        model = solver.model();
+
+        match &model {
+            Some(lits) => {
+                let mut cnt = 0;
+                let mut flag = false;
+
+                for (idx, lit) in lits.iter().enumerate() {
+                    if lit.var().index() >= arcs.len()+1 {
+                        continue;
+                    }
+
+                    if lit.is_positive() {
+                        cnt += 1;
+                    }
+
+                    if !flag && idx >= index && lit.is_negative() {
+                        flag = true;
+
+                        index = idx;
+                    }
+                }
+
+                if cnt == width*height-s.len() {
+                    break;
+                }
+
+                prev_formula = CnfFormula::new();
+
+                for lits in formula.iter() {
+                    prev_formula.add_clause(lits.clone());
+                }
+
+                println!("index: {}", index);
+
+                formula.add_clause(&[Lit::from_var(Var::from_index(index), true)]);
+
+                index += 1;
+
+                if index >= lits.len() {
+                    return None;
+                }
+            },
+            None => {
+                formula = CnfFormula::new();
+
+                for lits in prev_formula.iter() {
+                    formula.add_clause(lits.clone());
+                }
+            }
+        }
+    }*/
+    
+    println!("Solution: {}", solution);
+
     match model {
-        Some(_) => {
-            println!("{:?}", model);
+        Some(lits) => {
+            //println!("{:?}", lits);
+
+            let mut cnt = 0;
+
+            for lit in &lits {
+                //println!("{} [{}]", lit.var().index(), if lit.is_positive() { "True" } else { "False" });
+
+                if lit.is_positive() {
+                    let index = lit.var().index();
+
+                    if index >= arcs.len() {
+                        continue;
+                    }
+
+                    let arc = arcs[index-1];
+                    println!("{:?}", arc);
+                    
+                    cnt += 1;
+                }
+            }
+
+            if cnt != width*height-s.len() {
+                println!("Kansei Solution!!!");
+            }
         },
         None => {
             println!("No Solution");
@@ -155,12 +320,12 @@ fn parse_field(field :&Field) -> Option<(Vec<P>, Vec<P>, Vec<P>)> {
     for (i, line) in field.clone().into_iter().enumerate() {
         for (j, p) in line.clone().into_iter().enumerate() {
             if p > 0 {
-                ends[cnt[p]].push((i, j));
-                cnt[p] += 1;
-
-                if cnt[p] > 2 {
+                if cnt[p] >= 2 {
                     return None;
                 }
+
+                ends[cnt[p]].push((i, j));
+                cnt[p] += 1;
             } else {
                 b.push((i, j));
             }
@@ -170,9 +335,22 @@ fn parse_field(field :&Field) -> Option<(Vec<P>, Vec<P>, Vec<P>)> {
     Some((ends[0].clone(), ends[1].clone(), b))
 }
 
+fn mk_clause_impl(x: &Var, fu: &Vec<Var>, fv: &Vec<Var>) -> Vec<Vec<Lit>> {
+    let mut res: Vec<Vec<Lit>> = vec![];
+    let mb = fu.len();
+
+    for (i, fui) in fu.clone().into_iter().enumerate() {
+        let fvi = fv[i].clone();
+
+        res.push(vec![x.negative(), fui.negative(), fvi.positive()]);
+        res.push(vec![x.negative(), fui.positive(), fvi.negative()]);
+    }
+
+    res
+}
+
 fn mk_clause_eq1(vars: Vec<Var>) -> Vec<Vec<Lit>> {
     let mut res: Vec<Vec<Lit>> = vec![];
-    let mut flgs: Vec<bool> = vec![];
     let n = vars.len();
 
     for bit in 0..(1<<n) {
@@ -192,23 +370,36 @@ fn mk_clause_eq1(vars: Vec<Var>) -> Vec<Vec<Lit>> {
     res
 }
 
-fn mk_clause_less2(vars: Vec<Var>) -> Vec<Vec<Lit>> {
+fn mk_clause_d(varss: Vec<Vec<Var>>) -> Vec<Vec<Lit>> {
     let mut res: Vec<Vec<Lit>> = vec![];
-    let mut flgs: Vec<bool> = vec![];
-    let n = vars.len();
+    let n = varss[0].len();
 
-    for bit in 0..(1<<n) {
-        if n < 2+((bit as u32).popcnt()) as usize {
-            continue;
+    /*for ri in 0..2 {
+        for rj in 0..2 {
+            let mut lits: Vec<Lit> = vec![];
+
+            for i in 0..n {
+                lits.push(Lit::from_var(varss[ri][i], false));
+            }
+
+            res.push(lits);
         }
+    }*/
 
-        let mut lits: Vec<Lit> = vec![];
+    for r in 0..2 {
+        for i in 0..(1<<n) {
+            if 1+((i as u32).popcnt()) as usize == n {
+                continue;
+            }
 
-        for i in 0..n {
-            lits.push(Lit::from_var(vars[i], (bit>>i&1) != 0));
+            let mut lits = vec![];
+
+            for j in 0..n {
+                lits.push(Lit::from_var(varss[r][j], (i>>j&1) != 0));
+            }
+
+            res.push(lits);
         }
-
-        res.push(lits);
     }
 
     res
@@ -225,7 +416,7 @@ fn adj(p: P, width: usize, height: usize) -> Vec<P> {
         let ni = (p.0 as i32 + dy[d]) as usize;
         let nj = (p.1 as i32 + dx[d]) as usize;
 
-        if ni < width && nj < height && !st.contains(&(ni, nj)) {
+        if ni < height && nj < width && !st.contains(&(ni, nj)) {
             res.push((ni, nj));
             st.insert((ni, nj));
         }
@@ -237,8 +428,8 @@ fn adj(p: P, width: usize, height: usize) -> Vec<P> {
 fn gen_arcs(width: usize, height: usize) -> Vec<Arc> {
     let mut res: Vec<Arc> = vec![];
 
-    for i in 0..width {
-        for j in 0..height {
+    for i in 0..height {
+        for j in 0..width {
             let u = (i, j);
             let adjs = adj(u, width, height);
 
@@ -349,11 +540,18 @@ fn consume(index: &mut usize, i: &mut usize, j: &mut usize, width: usize, list: 
 }
 
 fn main() {
-    let opt_field = parse_url("http://pzv.jp/p.html?numlin/12/12/1p3h9g3j4i2j5t5l87g6l6j2g7jbgbjal8g1czg9uahcp4".to_string());
+    let url = "http://pzv.jp/p.html?numlin/10/10/8t12g8l34j21zt76j45l3g67t5".to_string();
+    let opt_field = parse_url(url);
+    //let opt_field = parse_url("http://pzv.jp/p.html?numlin/12/12/1p3h9g3j4i2j5t5l87g6l6j2g7jbgbjal8g1czg9uahcp4".to_string());
     
     println!("{:?}", opt_field);
 
     if let Some(field) = opt_field {
         solve_numberlink(&field);
+
+        //solve_numberlink(&vec![vec![1,0,0,1]]);
+        //solve_numberlink(&vec![vec![1,2,3], vec![0,2,0], vec![0,1,3]]);
+        //solve_numberlink(&vec![vec![1,0,1]]);
+        //solve_numberlink(&vec![vec![1,2], vec![0,0], vec![2,1]]);
     }
 }
