@@ -9,6 +9,25 @@ type P = (usize, usize);
 type Arc = (P, P);
 type Sol = Vec<Arc>;
 
+fn solve(url: String) -> Option<(Field, Sol)> {
+    let field = parse_url(url);
+
+    if let None = field {
+        return None;
+    }
+
+    let field = field.unwrap();
+
+    let sol = solve_numberlink(&field);
+
+    if let None = sol {
+        return None;
+    }
+
+    
+    Some((field.clone(), sol.unwrap()))
+}
+
 fn solve_numberlink(field: &Field) -> Option<Sol> {
     if field.len() == 0 || field[0].len() == 0 {
         return None;
@@ -37,9 +56,9 @@ fn solve_numberlink(field: &Field) -> Option<Sol> {
 
     let mut mp: HashMap<Arc, Var> = HashMap::new();
 
-    for (i, arc) in arcs.clone().into_iter().enumerate() {
+    /*for (i, arc) in arcs.clone().into_iter().enumerate() {
         println!("arc {}: {:?}", i, arc);
-    }
+    }*/
 
     /* "Solving Nubmerlink by a SAT-based Constraint Solver" (https://ipsj.ixsq.nii.ac.jp/ej/index.php?action=pages_view_main&active_action=repository_action_common_download&item_id=102780&item_no=1&attribute_id=1&file_no=1&page_id=13&block_id=8) */
     for (i, (u, v)) in arcs.clone().into_iter().enumerate() {
@@ -54,14 +73,10 @@ fn solve_numberlink(field: &Field) -> Option<Sol> {
     let mut m = s.len();
     let mut mb = 0;
 
-    println!("m: {}", m);
-
     while m > 0 {
         m >>= 1;
         mb += 1;
     }
-
-    println!("mb: {}", mb);
 
     let mut bmp: HashMap<P, Vec<Var>> = HashMap::new();
 
@@ -154,8 +169,6 @@ fn solve_numberlink(field: &Field) -> Option<Sol> {
         if b.contains(&u) {
             // (8) (9)
             {
-                println!("b contains {:?}", u);
-
                 let mut varss: Vec<Vec<Var>> = vec![];
                 let mut vars1: Vec<Var> = vec![];
                 let mut vars2: Vec<Var> = vec![];    
@@ -167,7 +180,7 @@ fn solve_numberlink(field: &Field) -> Option<Sol> {
                 varss.push(vars1);
                 varss.push(vars2);
 
-                for i in 0..2 {
+                /*for i in 0..2 {
                     println!("----------");
 
                     for var in &varss[i] {
@@ -175,7 +188,7 @@ fn solve_numberlink(field: &Field) -> Option<Sol> {
                     }
 
                     println!("----------");
-                }
+                }*/
 
                 for lits in mk_clause_d(varss) {
                     formula.add_clause(lits.as_slice());
@@ -275,7 +288,9 @@ fn solve_numberlink(field: &Field) -> Option<Sol> {
         }
     }*/
     
-    println!("Solution: {}", solution);
+    //println!("Solution: {}", solution);
+
+    let mut sol: Vec<Arc> = vec![];
 
     match model {
         Some(lits) => {
@@ -293,23 +308,27 @@ fn solve_numberlink(field: &Field) -> Option<Sol> {
                         continue;
                     }
 
-                    let arc = arcs[index-1];
-                    println!("{:?}", arc);
+                    //let arc = arcs[index-1];
+                    //println!("{:?}", arc);
+
+                    sol.push(arcs[index-1]);
                     
                     cnt += 1;
                 }
             }
 
-            if cnt != width*height-s.len() {
+            /*if cnt != width*height-s.len() {
                 println!("Kansei Solution!!!");
-            }
+            }*/
         },
         None => {
-            println!("No Solution");
+            //println!("No Solution");
+
+            return None;
         }
     }
 
-    Some(vec![])
+    Some(sol)
 }
 
 fn parse_field(field :&Field) -> Option<(Vec<P>, Vec<P>, Vec<P>)> {
@@ -541,17 +560,23 @@ fn consume(index: &mut usize, i: &mut usize, j: &mut usize, width: usize, list: 
 
 fn main() {
     let url = "http://pzv.jp/p.html?numlin/10/10/8t12g8l34j21zt76j45l3g67t5".to_string();
-    let opt_field = parse_url(url);
+    //let opt_field = parse_url(url);
     //let opt_field = parse_url("http://pzv.jp/p.html?numlin/12/12/1p3h9g3j4i2j5t5l87g6l6j2g7jbgbjal8g1czg9uahcp4".to_string());
     
-    println!("{:?}", opt_field);
+    //println!("{:?}", opt_field);
 
-    if let Some(field) = opt_field {
-        solve_numberlink(&field);
+    /*if let Some(field) = opt_field {
+        let sol = solve_numberlink(&field);
+
+        println!("{:?}", sol);
 
         //solve_numberlink(&vec![vec![1,0,0,1]]);
         //solve_numberlink(&vec![vec![1,2,3], vec![0,2,0], vec![0,1,3]]);
         //solve_numberlink(&vec![vec![1,0,1]]);
         //solve_numberlink(&vec![vec![1,2], vec![0,0], vec![2,1]]);
-    }
+    }*/
+
+    let sol = solve(url);
+
+    println!("{:?}", sol);
 }
