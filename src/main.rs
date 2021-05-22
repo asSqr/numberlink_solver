@@ -9,7 +9,7 @@ type P = (usize, usize);
 type Arc = (P, P);
 type Sol = Vec<Arc>;
 
-fn solve(url: String) -> Option<(Field, Sol)> {
+pub fn solve(url: String) -> Option<(Field, Sol)> {
     let field = parse_url(url);
 
     if let None = field {
@@ -54,7 +54,7 @@ fn solve_numberlink(field: &Field) -> Option<Sol> {
 
     let mut formula = CnfFormula::new();
 
-    let mut mp: HashMap<Arc, Var> = HashMap::new();
+    let mut mp: HashMap<Arc, usize> = HashMap::new();
 
     /*for (i, arc) in arcs.clone().into_iter().enumerate() {
         println!("arc {}: {:?}", i, arc);
@@ -62,11 +62,10 @@ fn solve_numberlink(field: &Field) -> Option<Sol> {
 
     /* "Solving Nubmerlink by a SAT-based Constraint Solver" (https://ipsj.ixsq.nii.ac.jp/ej/index.php?action=pages_view_main&active_action=repository_action_common_download&item_id=102780&item_no=1&attribute_id=1&file_no=1&page_id=13&block_id=8) */
     for (i, (u, v)) in arcs.clone().into_iter().enumerate() {
-        let x = Var::from_index(i+1);
         let num_u = field[u.0][u.1];
         let num_v = field[v.0][v.1];
     
-        mp.insert((u, v), x);
+        mp.insert((u, v), i);
     }
 
     let length = arcs.len();
@@ -78,7 +77,7 @@ fn solve_numberlink(field: &Field) -> Option<Sol> {
         mb += 1;
     }
 
-    let mut bmp: HashMap<P, Vec<Var>> = HashMap::new();
+    let mut bmp: HashMap<P, Vec<usize>> = HashMap::new();
 
     // vs*log(n)
     // 自然数変数を bit ごとに分解
@@ -87,12 +86,12 @@ fn solve_numberlink(field: &Field) -> Option<Sol> {
             let x = Var::from_index(length+index*mb+b+1);
 
             if !bmp.contains_key(&(i,j)) {
-                bmp.insert((i,j), vec![x]);
+                bmp.insert((i,j), vec![length+index*mb+b+1]);
             } else {
-                bmp.get_mut(&(i,j)).unwrap().push(x);
+                bmp.get_mut(&(i,j)).unwrap().push(length+index*mb+b+1);
             }
 
-            let mut num = field[i][j];
+            let mut num: usize = field[i][j];
 
             if num == 0 {
                 continue;
@@ -106,7 +105,7 @@ fn solve_numberlink(field: &Field) -> Option<Sol> {
     }
 
     for (u, v) in arcs.clone().into_iter() {
-        let x = mp[&(u, v)];
+        let x = Var::from_index(mp[&(u, v)]+1);
 
         // (12)
         // !(x and num_u != num_v)
@@ -115,7 +114,7 @@ fn solve_numberlink(field: &Field) -> Option<Sol> {
             formula.add_clause(lits.as_slice());
         }
 
-        let y = mp[&(v, u)];
+        let y = Var::from_index(mp[&(v, u)]+1);
 
         // (2)
         formula.add_clause(&[x.negative(), y.negative()]);
@@ -129,7 +128,7 @@ fn solve_numberlink(field: &Field) -> Option<Sol> {
             {
                 let mut vars: Vec<Var> = vec![];    
                 for v in adjs {
-                    vars.push(mp[&(u, *v)]);
+                    vars.push(Var::from_index(mp[&(u, *v)]+1));
                 }
 
                 for lits in mk_clause_eq1(vars) {
@@ -140,7 +139,7 @@ fn solve_numberlink(field: &Field) -> Option<Sol> {
             // (4)
             {
                 for v in adjs {
-                    formula.add_clause(&[mp[&(*v, u)].negative()]);
+                    formula.add_clause(&[Var::from_index(mp[&(*v, u)]+1).negative()]);
                 }
             }
         }
@@ -149,7 +148,7 @@ fn solve_numberlink(field: &Field) -> Option<Sol> {
             // (5)
             {
                 for v in adjs {
-                    formula.add_clause(&[mp[&(u, *v)].negative()]);
+                    formula.add_clause(&[Var::from_index(mp[&(u, *v)]+1).negative()]);
                 }
             }
             
@@ -157,7 +156,7 @@ fn solve_numberlink(field: &Field) -> Option<Sol> {
             {
                 let mut vars: Vec<Var> = vec![];    
                 for v in adjs {
-                    vars.push(mp[&(*v, u)]);
+                    vars.push(Var::from_index(mp[&(*v, u)]+1));
                 }
 
                 for lits in mk_clause_eq1(vars) {
@@ -173,8 +172,8 @@ fn solve_numberlink(field: &Field) -> Option<Sol> {
                 let mut vars1: Vec<Var> = vec![];
                 let mut vars2: Vec<Var> = vec![];    
                 for v in adjs {
-                    vars1.push(mp[&(u, *v)]);
-                    vars2.push(mp[&(*v, u)]);
+                    vars1.push(Var::from_index(mp[&(u, *v)]+1));
+                    vars2.push(Var::from_index(mp[&(*v, u)]+1));
                 }
 
                 varss.push(vars1);
@@ -354,12 +353,14 @@ fn parse_field(field :&Field) -> Option<(Vec<P>, Vec<P>, Vec<P>)> {
     Some((ends[0].clone(), ends[1].clone(), b))
 }
 
-fn mk_clause_impl(x: &Var, fu: &Vec<Var>, fv: &Vec<Var>) -> Vec<Vec<Lit>> {
+fn mk_clause_impl(x: &Var, fu: &Vec<usize>, fv: &Vec<usize>) -> Vec<Vec<Lit>> {
     let mut res: Vec<Vec<Lit>> = vec![];
     let mb = fu.len();
 
-    for (i, fui) in fu.clone().into_iter().enumerate() {
-        let fvi = fv[i].clone();
+    for (i, fuidx) in fu.clone().into_iter().enumerate() {
+        let fvidx = fv[i].clone();
+        let fui = Var::from_index(fuidx);
+        let fvi = Var::from_index(fvidx);
 
         res.push(vec![x.negative(), fui.negative(), fvi.positive()]);
         res.push(vec![x.negative(), fui.positive(), fvi.negative()]);
@@ -368,12 +369,27 @@ fn mk_clause_impl(x: &Var, fu: &Vec<Var>, fv: &Vec<Var>) -> Vec<Vec<Lit>> {
     res
 }
 
+fn popcount(bit: usize) -> usize {
+    let mut ret = 0;
+    let mut b = bit;
+
+    while b > 0 {
+        if b&1 != 0 {
+            ret += 1;
+        }
+
+        b >>= 1;
+    }
+
+    ret
+}
+
 fn mk_clause_eq1(vars: Vec<Var>) -> Vec<Vec<Lit>> {
     let mut res: Vec<Vec<Lit>> = vec![];
     let n = vars.len();
 
     for bit in 0..(1<<n) {
-        if ((bit as u32).popcnt()) as usize == n-1 {
+        if 1+popcount(bit) == n {
             continue;
         }
 
@@ -407,7 +423,7 @@ fn mk_clause_d(varss: Vec<Vec<Var>>) -> Vec<Vec<Lit>> {
 
     for r in 0..2 {
         for i in 0..(1<<n) {
-            if 1+((i as u32).popcnt()) as usize == n {
+            if 1+popcount(i) == n {
                 continue;
             }
 
@@ -461,7 +477,7 @@ fn gen_arcs(width: usize, height: usize) -> Vec<Arc> {
     res
 }
 
-fn parse_url(url: String) -> Option<Field> {
+pub fn parse_url(url: String) -> Option<Field> {
     let splitter = '/';
     let params: Vec<String> = url.split(splitter).map(|s| s.to_string()).collect();
     let length = params.len();
