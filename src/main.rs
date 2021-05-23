@@ -2,7 +2,6 @@ use std::collections::{HashMap, HashSet};
 use varisat::{CnfFormula, ExtendFormula};
 use varisat::solver::Solver;
 use varisat::{Var, Lit};
-use bitintr::Popcnt;
 
 type Field = Vec<Vec<usize>>;
 type P = (usize, usize);
@@ -62,9 +61,6 @@ fn solve_numberlink(field: &Field) -> Option<Sol> {
 
     /* "Solving Nubmerlink by a SAT-based Constraint Solver" (https://ipsj.ixsq.nii.ac.jp/ej/index.php?action=pages_view_main&active_action=repository_action_common_download&item_id=102780&item_no=1&attribute_id=1&file_no=1&page_id=13&block_id=8) */
     for (i, (u, v)) in arcs.clone().into_iter().enumerate() {
-        let num_u = field[u.0][u.1];
-        let num_v = field[v.0][v.1];
-    
         mp.insert((u, v), i);
     }
 
@@ -220,7 +216,7 @@ fn solve_numberlink(field: &Field) -> Option<Sol> {
 
     solver.add_formula(&formula);
 
-    let solution = solver.solve().unwrap();
+    solver.solve().unwrap();
 
     let model = solver.model();
 
@@ -295,8 +291,6 @@ fn solve_numberlink(field: &Field) -> Option<Sol> {
         Some(lits) => {
             //println!("{:?}", lits);
 
-            let mut cnt = 0;
-
             for lit in &lits {
                 //println!("{} [{}]", lit.var().index(), if lit.is_positive() { "True" } else { "False" });
 
@@ -311,8 +305,6 @@ fn solve_numberlink(field: &Field) -> Option<Sol> {
                     //println!("{:?}", arc);
 
                     sol.push(arcs[index-1]);
-                    
-                    cnt += 1;
                 }
             }
 
@@ -331,7 +323,7 @@ fn solve_numberlink(field: &Field) -> Option<Sol> {
 }
 
 fn parse_field(field :&Field) -> Option<(Vec<P>, Vec<P>, Vec<P>)> {
-    let mut cnt = vec![0; 17];
+    let mut cnt = vec![0; 100];
     let mut ends = vec![vec![]; 2];
     let mut b = vec![];
     
@@ -355,8 +347,7 @@ fn parse_field(field :&Field) -> Option<(Vec<P>, Vec<P>, Vec<P>)> {
 
 fn mk_clause_impl(x: &Var, fu: &Vec<usize>, fv: &Vec<usize>) -> Vec<Vec<Lit>> {
     let mut res: Vec<Vec<Lit>> = vec![];
-    let mb = fu.len();
-
+    
     for (i, fuidx) in fu.clone().into_iter().enumerate() {
         let fvidx = fv[i].clone();
         let fui = Var::from_index(fuidx);
@@ -503,7 +494,7 @@ pub fn parse_url(url: String) -> Option<Field> {
 }
 
 fn is_valid_code(code: &String) -> bool {
-    return code.chars().all(char::is_alphanumeric);
+    return code.chars().all(|ch| char::is_alphanumeric(ch) || ch == '-');
 }
 
 fn decode_field(width: usize, height: usize, code: String) -> Option<Field> {
@@ -515,10 +506,9 @@ fn decode_field(width: usize, height: usize, code: String) -> Option<Field> {
     let mut res: Field = vec![vec![0; width as usize]; height as usize];
 
     while index < list.len() {
-        while let Some(num) = get_num(index, list) {
+        while let Some(num) = get_num(&mut index, list) {
             res[i as usize][j as usize] = num;
 
-            index += 1;
             j += 1;
 
             if j >= width {
@@ -537,10 +527,23 @@ fn decode_field(width: usize, height: usize, code: String) -> Option<Field> {
     Some(res)
 }
 
-fn get_num(index: usize, list: &Vec<char>) -> Option<usize> {
-    let ch = list[index as usize];
+fn get_num(index: &mut usize, list: &Vec<char>) -> Option<usize> {
+    let ch = list[*index as usize];
 
-    if ch.is_digit(16) {
+    if ch == '-' {
+        *index += 1;
+        let mut res = 0;
+
+        while *index < list.len() && list[*index].is_digit(16) {
+            res *= 16;
+            res += list[*index].to_digit(16).unwrap();
+            *index += 1;
+        }
+
+        return Some(res as usize);
+    } else if ch.is_digit(16) {
+        *index += 1;
+
         return match ch.to_digit(16) {
             Some(num) => Some(num as usize),
             None => None,
@@ -575,7 +578,8 @@ fn consume(index: &mut usize, i: &mut usize, j: &mut usize, width: usize, list: 
 }
 
 fn main() {
-    let url = "http://pzv.jp/p.html?numlin/10/10/8t12g8l34j21zt76j45l3g67t5".to_string();
+    //let url = "http://pzv.jp/p.html?numlin/10/10/8t12g8l34j21zt76j45l3g67t5".to_string();
+    let url = "http://pzv.jp/p.html?numlin/18/18/zk-12hdral8n-14pbofh-10p1gel-11i-10zg5gei2j-13i9m3h1k8j4k-14h-12mdi3j-13i6g9zgfi4l7gcp5h6oap-11n2lcrbh7zk".to_string();
     //let opt_field = parse_url(url);
     //let opt_field = parse_url("http://pzv.jp/p.html?numlin/12/12/1p3h9g3j4i2j5t5l87g6l6j2g7jbgbjal8g1czg9uahcp4".to_string());
     
