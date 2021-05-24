@@ -534,7 +534,7 @@ fn get_num(index: &mut usize, list: &Vec<char>) -> Option<usize> {
         *index += 1;
         let mut res = 0;
 
-        while *index < list.len() && list[*index].is_digit(16) {
+        while res*16 < 100 && *index < list.len() && list[*index].is_digit(16) {
             res *= 16;
             res += list[*index].to_digit(16).unwrap();
             *index += 1;
@@ -579,7 +579,8 @@ fn consume(index: &mut usize, i: &mut usize, j: &mut usize, width: usize, list: 
 
 fn main() {
     //let url = "http://pzv.jp/p.html?numlin/10/10/8t12g8l34j21zt76j45l3g67t5".to_string();
-    let url = "http://pzv.jp/p.html?numlin/18/18/zk-12hdral8n-14pbofh-10p1gel-11i-10zg5gei2j-13i9m3h1k8j4k-14h-12mdi3j-13i6g9zgfi4l7gcp5h6oap-11n2lcrbh7zk".to_string();
+    //let url = "http://pzv.jp/p.html?numlin/17/17/h5n3jajanfj3s-11j7k7m1kcj1m6k8jdsbx-10zkbxds8j5kcm4j6kfmek-10j4s9j9nej2j2n-11h".to_string();
+    let url = "https://puzz.link/p?numlin/42/25/zzi1zx5j3ve-1cv-13n6zp-2br2zl-2cvep8-1dp-29z-10x7zj-14t-1dzn-16j-1abj-20zr-19l-21zv-1bh-1fzg2h6hbh-11hch-17l-22h-24h-27h-2ah-24h-1cj3h7hch-12h-16h-1al-14h-21h-23h-29h-26h-2cj4h8hdh9h-17h-12l-1fh-25h-28h-2bh-27h-10zgah-20zv-1bl-23zr-18j-18fj-22zn-15t-26zj-13x-25zfp-15-19p-11vazl4r9zp-2an5vd-1ev-1ej1zx-28zzi".to_string();
     //let opt_field = parse_url(url);
     //let opt_field = parse_url("http://pzv.jp/p.html?numlin/12/12/1p3h9g3j4i2j5t5l87g6l6j2g7jbgbjal8g1czg9uahcp4".to_string());
     
@@ -596,6 +597,10 @@ fn main() {
         //solve_numberlink(&vec![vec![1,2], vec![0,0], vec![2,1]]);
     }*/
 
+    //let field = parse_url(url);
+
+    //println!("{:?}", field);
+    
     let sol = solve(url);
 
     println!("{:?}", sol);
